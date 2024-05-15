@@ -3260,6 +3260,8 @@
 #if DISABLED(NO_HOME_OFFSETS)
   #if IS_CARTESIAN
     #define HAS_HOME_OFFSET 1     // M206 affects the Native Machine Space on G28
+  #elif ENABLED(POLAR) && ENABLED(POLAR_CRANE)
+    #define HAS_HOME_OFFSET 1     // M206 affects the Native Machine Space on G28
   #elif IS_SCARA
     #define HAS_SCARA_OFFSET 1    // The SCARA home offset applies only on G28
   #endif

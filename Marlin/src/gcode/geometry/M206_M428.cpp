@@ -64,6 +64,9 @@ void GcodeSuite::M206_report(const bool forReplay/*=true*/) {
         SP_V_STR, V_AXIS_UNIT(home_offset.v),
         SP_W_STR, W_AXIS_UNIT(home_offset.w)
       )
+    #elif ENABLED(POLAR_CRANE)
+      PSTR("  M206 X"), LINEAR_UNIT(home_offset.x),
+      SP_Z_STR, LINEAR_UNIT(home_offset.z)
     #else
       PSTR("  M206 Z"), LINEAR_UNIT(home_offset.z)
     #endif

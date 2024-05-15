@@ -177,7 +177,7 @@ xyz_pos_t cartes;
   // Set by M206, M428, or menu item. Saved to EEPROM.
   xyz_pos_t home_offset{0};
 #endif
-#if HAS_WORKSPACE_OFFSET
+#if HAS_WORKSPACE_OFFSETworkspace_offset
   // The above two are combined to save on computes
   xyz_pos_t workspace_offset{0};
 #endif
@@ -357,6 +357,10 @@ void report_current_position_projected() {
 
     #elif ENABLED(POLAR)
       can_reach = HYPOT(rx, ry) <= PRINTABLE_RADIUS;
+
+      #if ENABLED(POLAR_CRANE)
+        can_reach = can_reach && HYPOT(rx, ry) > POLAR_CENTER_OFFSET;
+      #endif
     #endif
 
     return can_reach;

@@ -54,6 +54,8 @@ float absoluteAngle(float a) {
   return a;
 }
 
+#if DISABLED(POLAR_CRANE)
+
 void forward_kinematics(const_float_t r, const_float_t theta) {
   const float absTheta = absoluteAngle(theta);
   float radius = r;
@@ -91,6 +93,44 @@ void inverse_kinematics(const xyz_pos_t &raw) {
 
     delta.set(r, theta, raw.z);
 }
+
+#else
+
+void forward_kinematics(const_float_t r, const_float_t theta) {
+  const float absTheta = absoluteAngle(theta);
+  float radius = r + home_offset.x > 0 ? home_offset.x : polar_center_offset;
+
+  cartes.x = cos(RADIANS(absTheta))*radius;
+  cartes.y = sin(RADIANS(absTheta))*radius;
+}
+
+void inverse_kinematics(const xyz_pos_t &raw) {
+    const float x = raw.x, y = raw.y,
+                rawRadius = HYPOT(x,y),
+                posTheta = DEGREES(ATAN2(y, x));
+
+    static float current_polar_theta = 0;
+
+    float r = rawRadius,
+          theta = absoluteAngle(posTheta),
+          currentAbsTheta = absoluteAngle(current_polar_theta);
+
+    r -= home_offset.x > 0 ? home_offset.x : polar_center_offset;
+
+    const float deltaTheta = theta - currentAbsTheta;
+    if (ABS(deltaTheta) <= 180)
+      theta = current_polar_theta + deltaTheta;
+    else {
+      if (currentAbsTheta > 180) theta = current_polar_theta + 360 + deltaTheta;
+      else theta = current_polar_theta - (360 - deltaTheta);
+    }
+
+    current_polar_theta = theta;
+
+    delta.set(r, theta, raw.z);
+}
+
+#endif
 
 void polar_report_positions() {
   SERIAL_ECHOLNPGM("X: ", planner.get_axis_position_mm(X_AXIS),

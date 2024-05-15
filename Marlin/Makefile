@@ -153,7 +153,6 @@ ifeq ($(HARDWARE_MOTHERBOARD),0)
 
 # MEGA/RAMPS up to 1.2
 else ifeq ($(HARDWARE_MOTHERBOARD),1000)
-
 # RAMPS 1.3 (Power outputs: Hotend, Fan, Bed)
 else ifeq ($(HARDWARE_MOTHERBOARD),1010)
 # RAMPS 1.3 (Power outputs: Hotend0, Hotend1, Bed)
