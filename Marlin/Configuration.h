@@ -1798,7 +1798,7 @@
 // Direction of endstops when homing; 1=MAX, -1=MIN
 // :[-1,1]
 #define X_HOME_DIR -1
-#define Y_HOME_DIR 0  // 0 = No homing (no endstop)
+#define Y_HOME_DIR -1  // Polar crane Y-axis homing (custom bidirectional search)
 #define Z_HOME_DIR -1
 //#define I_HOME_DIR -1
 //#define J_HOME_DIR -1
@@ -1806,6 +1806,18 @@
 //#define U_HOME_DIR -1
 //#define V_HOME_DIR -1
 //#define W_HOME_DIR -1
+
+// Polar Y-Axis Homing Configuration
+// Enable custom bidirectional homing for polar crane Y-axis
+// NOTE: For POLAR kinematics, Y-axis native units are degrees
+// All distances and feedrates below are in native axis units (degrees for Y)
+#define POLAR_Y_HOMING
+#ifdef POLAR_Y_HOMING
+  #define POLAR_Y_SEARCH_DEGREES 15.0  // Maximum degrees to search in each direction
+  #define POLAR_Y_HOMING_FEEDRATE 3.0  // Feedrate for initial search (degrees/s)
+  #define POLAR_Y_BUMP_FEEDRATE 1.0    // Feedrate for precise detection (degrees/s)
+  #define POLAR_Y_BUMP_DISTANCE 10.0    // Distance to back off (degrees)
+#endif
 
 /**
  * Safety Stops

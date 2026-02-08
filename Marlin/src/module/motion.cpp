@@ -2091,6 +2091,131 @@ void prepare_line_to_destination() {
   #endif
 
   /**
+   * Custom homing for polar Y-axis (rotational crane)
+   * Searches bidirectionally for endstop, then approaches from both sides
+   * to find precise trigger points and sets home to their average.
+   */
+  #if ENABLED(POLAR_Y_HOMING)
+    void homeaxis_polar_y() {
+      DEBUG_SECTION(log_polar_y, "homeaxis_polar_y", DEBUGGING(LEVELING));
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM(">>> homeaxis_polar_y()");
+
+      const AxisEnum axis = Y_AXIS;
+      const float search_distance = POLAR_Y_SEARCH_DEGREES;
+      const float bump_distance = POLAR_Y_BUMP_DISTANCE;
+      
+      bool endstop_found = false;
+      
+      // Enable endstops for homing
+      endstops.enable(true);
+      endstops.enable_z_probe(false);
+      
+      // Phase 1: Try to find endstop in negative direction
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 1: Search negative direction");
+      
+      // Set position to 0 for relative moves
+      current_position[axis] = 0;
+      sync_plan_position();
+      
+      // Move in negative direction
+      planner.synchronize();
+      endstops.hit_on_purpose(); // Clear any previous endstop hits
+      
+      do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, false);
+      planner.synchronize();
+      
+      // Check if we hit the endstop
+      if (endstops.trigger_state() & (_BV(Y_MIN) | _BV(Y_MAX))) {
+        endstop_found = true;
+        if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in negative direction");
+      }
+      
+      if (!endstop_found) {
+        // Phase 2: Return to start and search positive direction
+        if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 2: Search positive direction");
+        
+        // Disable endstops to return
+        endstops.enable(false);
+        do_homing_move(axis, search_distance, POLAR_Y_HOMING_FEEDRATE, false);
+        planner.synchronize();
+        
+        // Re-enable and search positive
+        endstops.enable(true);
+        endstops.hit_on_purpose();
+        
+        do_homing_move(axis, search_distance, POLAR_Y_HOMING_FEEDRATE, false);
+        planner.synchronize();
+        
+        if (endstops.trigger_state() & (_BV(Y_MIN) | _BV(Y_MAX))) {
+          endstop_found = true;
+          if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in positive direction");
+        }
+      }
+      
+      if (!endstop_found) {
+        SERIAL_ERROR_MSG("Y endstop not found in either direction!");
+        endstops.not_homing();
+        return;
+      }
+      
+      // Phase 3: Back off from endstop
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 3: Back off from endstop");
+      endstops.enable(false);
+      do_homing_move(axis, -bump_distance, POLAR_Y_BUMP_FEEDRATE, false);
+      planner.synchronize();
+      
+      // Phase 4: Slow approach from one side
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 4: Slow approach (side 1)");
+      endstops.enable(true);
+      endstops.hit_on_purpose();
+      
+      do_homing_move(axis, bump_distance * 2, POLAR_Y_BUMP_FEEDRATE, true);
+      planner.synchronize();
+      
+      const float trigger_pos_1 = current_position[axis];
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Trigger position 1: ", trigger_pos_1);
+      
+      // Phase 5: Back off for second approach
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 5: Back off for second approach");
+      endstops.enable(false);
+      do_homing_move(axis, bump_distance * 2, POLAR_Y_BUMP_FEEDRATE, false);
+      planner.synchronize();
+      
+      // Phase 6: Slow approach from opposite side
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 6: Slow approach (side 2)");
+      endstops.enable(true);
+      endstops.hit_on_purpose();
+      
+      do_homing_move(axis, -bump_distance * 3, POLAR_Y_BUMP_FEEDRATE, true);
+      planner.synchronize();
+      
+      const float trigger_pos_2 = current_position[axis];
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Trigger position 2: ", trigger_pos_2);
+      
+      // Phase 7: Calculate center position and move there
+      const float home_position = (trigger_pos_1 + trigger_pos_2) / 2.0f;
+      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Calculated home position: ", home_position);
+      
+      // Move to calculated home position
+      endstops.enable(false);
+      const float move_to_home = home_position - trigger_pos_2;
+      do_homing_move(axis, move_to_home, POLAR_Y_BUMP_FEEDRATE, false);
+      planner.synchronize();
+      
+      // Set this position as Y=0
+      current_position[axis] = 0;
+      sync_plan_position();
+      
+      endstops.not_homing();
+      
+      if (DEBUGGING(LEVELING)) {
+        DEBUG_ECHOLNPGM("Home set at Y=0");
+        DEBUG_ECHOLNPGM("<<< homeaxis_polar_y()");
+      }
+    }
+  #endif
+
+  /**
    * Home an individual "raw axis" to its endstop.
    * This applies to XYZ on Cartesian and Core robots, and
    * to the individual ABC steppers on DELTA and SCARA.
@@ -2102,6 +2227,16 @@ void prepare_line_to_destination() {
    */
 
   void homeaxis(const AxisEnum axis) {
+
+    #if ENABLED(POLAR_Y_HOMING)
+      // Use custom polar homing for Y axis
+      if (axis == Y_AXIS) {
+        homeaxis_polar_y();
+        set_axis_is_at_home(axis);
+        sync_plan_position();
+        return;
+      }
+    #endif
 
     #if ANY(MORGAN_SCARA, MP_SCARA)
       // Only Z homing (with probe) is permitted
