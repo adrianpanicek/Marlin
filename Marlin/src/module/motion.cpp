@@ -2108,7 +2108,9 @@ void prepare_line_to_destination() {
       
       // Enable endstops for homing
       endstops.enable(true);
-      endstops.enable_z_probe(false);
+      #if HAS_BED_PROBE
+        endstops.enable_z_probe(false);
+      #endif
       
       // Phase 1: Try to find endstop in negative direction
       if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 1: Search negative direction");
@@ -2125,7 +2127,14 @@ void prepare_line_to_destination() {
       planner.synchronize();
       
       // Check if we hit the endstop
-      if (endstops.trigger_state() & (_BV(Y_MIN) | _BV(Y_MAX))) {
+      if (endstops.trigger_state() & (0
+        #if HAS_Y_MIN_STATE
+          | _BV(Y_MIN)
+        #endif
+        #if HAS_Y_MAX_STATE
+          | _BV(Y_MAX)
+        #endif
+      )) {
         endstop_found = true;
         if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in negative direction");
       }
@@ -2146,7 +2155,14 @@ void prepare_line_to_destination() {
         do_homing_move(axis, search_distance, POLAR_Y_HOMING_FEEDRATE, false);
         planner.synchronize();
         
-        if (endstops.trigger_state() & (_BV(Y_MIN) | _BV(Y_MAX))) {
+        if (endstops.trigger_state() & (0
+          #if HAS_Y_MIN_STATE
+            | _BV(Y_MIN)
+          #endif
+          #if HAS_Y_MAX_STATE
+            | _BV(Y_MAX)
+          #endif
+        )) {
           endstop_found = true;
           if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in positive direction");
         }
