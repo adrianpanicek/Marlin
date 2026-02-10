@@ -2098,6 +2098,7 @@ void prepare_line_to_destination() {
   #if ENABLED(POLAR_Y_HOMING)
     void homeaxis_polar_y() {
       DEBUG_SECTION(log_polar_y, "homeaxis_polar_y", DEBUGGING(LEVELING));
+      SERIAL_ECHOLNPGM("=== POLAR Y HOMING START ===");
       if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM(">>> homeaxis_polar_y()");
 
       const AxisEnum axis = Y_AXIS;
@@ -2106,6 +2107,11 @@ void prepare_line_to_destination() {
       
       bool endstop_found = false;
       
+      // Check initial endstop state
+      const uint16_t initial_trigger_state = endstops.trigger_state();
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Initial trigger state: 0x", hex_word(initial_trigger_state));
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Current Y position: ", current_position[axis]);
+      
       // Enable endstops for homing
       endstops.enable(true);
       #if HAS_BED_PROBE
@@ -2113,6 +2119,7 @@ void prepare_line_to_destination() {
       #endif
       
       // Phase 1: Try to find endstop in negative direction
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Phase 1 - Search negative direction");
       if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 1: Search negative direction");
       
       // Set position to 0 for relative moves
@@ -2123,11 +2130,15 @@ void prepare_line_to_destination() {
       planner.synchronize();
       endstops.hit_on_purpose(); // Clear any previous endstop hits
       
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Moving -", search_distance, " degrees");
       do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, false);
       planner.synchronize();
       
       // Check if we hit the endstop
-      if (endstops.trigger_state() & (0
+      const uint16_t trigger_state_1 = endstops.trigger_state();
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after negative move: 0x", hex_word(trigger_state_1));
+      
+      if (trigger_state_1 & (0
         #if HAS_Y_MIN_STATE
           | _BV(Y_MIN)
         #endif
@@ -2136,15 +2147,21 @@ void prepare_line_to_destination() {
         #endif
       )) {
         endstop_found = true;
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: Endstop found in negative direction");
         if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in negative direction");
+      }
+      else {
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: No endstop in negative direction");
       }
       
       if (!endstop_found) {
         // Phase 2: Return to start and search positive direction
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: Phase 2 - Search positive direction");
         if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 2: Search positive direction");
         
         // Disable endstops to return
         endstops.enable(false);
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: Returning to start (+", search_distance, " degrees)");
         do_homing_move(axis, search_distance, POLAR_Y_HOMING_FEEDRATE, false);
         planner.synchronize();
         
@@ -2152,10 +2169,14 @@ void prepare_line_to_destination() {
         endstops.enable(true);
         endstops.hit_on_purpose();
         
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: Moving +", search_distance, " degrees");
         do_homing_move(axis, search_distance, POLAR_Y_HOMING_FEEDRATE, false);
         planner.synchronize();
         
-        if (endstops.trigger_state() & (0
+        const uint16_t trigger_state_2 = endstops.trigger_state();
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after positive move: 0x", hex_word(trigger_state_2));
+        
+        if (trigger_state_2 & (0
           #if HAS_Y_MIN_STATE
             | _BV(Y_MIN)
           #endif
@@ -2164,7 +2185,11 @@ void prepare_line_to_destination() {
           #endif
         )) {
           endstop_found = true;
+          SERIAL_ECHOLNPGM("POLAR Y HOMING: Endstop found in positive direction");
           if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in positive direction");
+        }
+        else {
+          SERIAL_ECHOLNPGM("POLAR Y HOMING: No endstop in positive direction");
         }
       }
       
@@ -2224,6 +2249,9 @@ void prepare_line_to_destination() {
       
       endstops.not_homing();
       
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Complete - Y set to 0");
+      SERIAL_ECHOLNPGM("=== POLAR Y HOMING END ===");
+      
       if (DEBUGGING(LEVELING)) {
         DEBUG_ECHOLNPGM("Home set at Y=0");
         DEBUG_ECHOLNPGM("<<< homeaxis_polar_y()");
@@ -2247,6 +2275,7 @@ void prepare_line_to_destination() {
     #if ENABLED(POLAR_Y_HOMING)
       // Use custom polar homing for Y axis
       if (axis == Y_AXIS) {
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: homeaxis called for Y_AXIS");
         homeaxis_polar_y();
         set_axis_is_at_home(axis);
         sync_plan_position();
