@@ -2109,7 +2109,7 @@ void prepare_line_to_destination() {
       
       // Check initial endstop state
       const uint16_t initial_trigger_state = endstops.trigger_state();
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Initial trigger state: 0x", hex_word(initial_trigger_state));
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Initial trigger state: ", initial_trigger_state);
       SERIAL_ECHOLNPGM("POLAR Y HOMING: Current Y position: ", current_position[axis]);
       
       // Enable endstops for homing
@@ -2136,7 +2136,7 @@ void prepare_line_to_destination() {
       
       // Check if we hit the endstop
       const uint16_t trigger_state_1 = endstops.trigger_state();
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after negative move: 0x", hex_word(trigger_state_1));
+      SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after negative move: ", trigger_state_1);
       
       if (trigger_state_1 & (0
         #if HAS_Y_MIN_STATE
@@ -2174,7 +2174,7 @@ void prepare_line_to_destination() {
         planner.synchronize();
         
         const uint16_t trigger_state_2 = endstops.trigger_state();
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after positive move: 0x", hex_word(trigger_state_2));
+        SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after positive move: ", trigger_state_2);
         
         if (trigger_state_2 & (0
           #if HAS_Y_MIN_STATE
