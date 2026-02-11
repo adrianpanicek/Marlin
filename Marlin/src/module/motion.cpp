@@ -2097,175 +2097,82 @@ void prepare_line_to_destination() {
    */
   #if ENABLED(POLAR_Y_HOMING)
     
-    // Custom move function for polar Y homing that checks endstops in both directions
-    // Uses SCARA-style approach since Y is a rotational axis in degrees
-    static bool do_polar_y_search_move(const float distance, const feedRate_t fr_mm_s) {
-      const AxisEnum axis = Y_AXIS;
-      
-      // Tell the planner the axis is at 0
-      current_position[axis] = 0;
-      sync_plan_position();
-      
-      // Set target position (in degrees for Y axis)
-      current_position[axis] = distance;
-      line_to_current_position(fr_mm_s);
-      
-      planner.synchronize();
-      
-      // Check if endstop was hit
-      const uint16_t trigger_state = endstops.trigger_state();
-      return (trigger_state & (0
-        #if HAS_Y_MIN_STATE
-          | _BV(Y_MIN)
-        #endif
-        #if HAS_Y_MAX_STATE
-          | _BV(Y_MAX)
-        #endif
-      )) != 0;
-    }
-    
     void homeaxis_polar_y() {
       DEBUG_SECTION(log_polar_y, "homeaxis_polar_y", DEBUGGING(LEVELING));
       SERIAL_ECHOLNPGM("=== POLAR Y HOMING START ===");
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM(">>> homeaxis_polar_y()");
 
       const AxisEnum axis = Y_AXIS;
       const float search_distance = POLAR_Y_SEARCH_DEGREES;
       const float bump_distance = POLAR_Y_BUMP_DISTANCE;
+      const float bump_feedrate = POLAR_Y_BUMP_FEEDRATE;
       
-      bool endstop_found = false;
+      float trigger_pos_1 = 0, trigger_pos_2 = 0;
+      bool found = false;
       
-      // Check initial endstop state
-      const uint16_t initial_trigger_state = endstops.trigger_state();
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Initial trigger state: ", initial_trigger_state);
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Current Y position: ", current_position[axis]);
-      
-      // Enable endstops for homing
+      // Enable endstops
       endstops.enable(true);
       #if HAS_BED_PROBE
         endstops.enable_z_probe(false);
       #endif
       
-      // Phase 1: Try to find endstop in negative direction
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Phase 1 - Search negative direction");
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 1: Search negative direction");
-      
-      // Set position to 0 for relative moves
+      // Start from position 0
       current_position[axis] = 0;
       sync_plan_position();
       
-      // Move in negative direction
-      planner.synchronize();
-      endstops.hit_on_purpose(); // Clear any previous endstop hits
+      // Phase 1: Fast search in negative direction (uses ISR endstop checking)
+      SERIAL_ECHOLNPGM("Phase 1: Fast search negative");
+      endstops.hit_on_purpose();
+      do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, true);
       
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Moving -", search_distance, " degrees");
-      endstop_found = do_polar_y_search_move(-search_distance, POLAR_Y_HOMING_FEEDRATE);
-      
-      // Check if we hit the endstop
-      const uint16_t trigger_state_1 = endstops.trigger_state();
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after negative move: ", trigger_state_1);
-      
-      if (endstop_found) {
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: Endstop found in negative direction");
-        if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in negative direction");
-      }
-      else {
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: No endstop in negative direction");
-      }
-      
-      if (!endstop_found) {
-        // Phase 2: Return to start and search positive direction
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: Phase 2 - Search positive direction");
-        if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 2: Search positive direction");
+      if (endstops.trigger_state()) {
+        found = true;
+        SERIAL_ECHOLNPGM("Found at approx: ", current_position[axis]);
         
-        // Disable endstops to return
+        // Phase 2: Back off and approach slowly from negative (left edge)
+        SERIAL_ECHOLNPGM("Phase 2: Finding left edge");
         endstops.enable(false);
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: Returning to start (+", search_distance, " degrees)");
-        do_homing_move(axis, search_distance, POLAR_Y_HOMING_FEEDRATE, false);
-        planner.synchronize();
+        do_homing_move(axis, bump_distance, bump_feedrate, false);
         
-        // Re-enable and search positive
         endstops.enable(true);
         endstops.hit_on_purpose();
+        do_homing_move(axis, -(bump_distance + 2.0f), bump_feedrate, true);
+        trigger_pos_1 = current_position[axis];
+        SERIAL_ECHOLNPGM("Left edge (trigger_pos_1): ", trigger_pos_1);
         
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: Moving +", search_distance, " degrees");
-        endstop_found = do_polar_y_search_move(search_distance, POLAR_Y_HOMING_FEEDRATE);
+        // Phase 3: Move past endstop to other side
+        SERIAL_ECHOLNPGM("Phase 3: Moving to right side");
+        endstops.enable(false);
+        do_homing_move(axis, bump_distance, bump_feedrate, false);
         
-        const uint16_t trigger_state_2 = endstops.trigger_state();
-        SERIAL_ECHOLNPGM("POLAR Y HOMING: Trigger state after positive move: ", trigger_state_2);
-        
-        if (endstop_found) {
-          SERIAL_ECHOLNPGM("POLAR Y HOMING: Endstop found in positive direction");
-          if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Endstop found in positive direction");
-        }
-        else {
-          SERIAL_ECHOLNPGM("POLAR Y HOMING: No endstop in positive direction");
-        }
+        // Phase 4: Slow approach from positive (right edge)
+        SERIAL_ECHOLNPGM("Phase 4: Finding right edge");
+        endstops.enable(true);
+        endstops.hit_on_purpose();
+        do_homing_move(axis, -(bump_distance + 2.0f), bump_feedrate, true);
+        trigger_pos_2 = current_position[axis];
+        SERIAL_ECHOLNPGM("Right edge (trigger_pos_2): ", trigger_pos_2);
       }
       
-      if (!endstop_found) {
-        SERIAL_ERROR_MSG("Y endstop not found in either direction!");
+      if (!found) {
+        SERIAL_ERROR_MSG("Y endstop not found!");
         endstops.not_homing();
         return;
       }
       
-      // Phase 3: Back off from endstop
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 3: Back off from endstop");
+      // Calculate center and move there
+      const float home_pos = (trigger_pos_1 + trigger_pos_2) / 2.0f;
+      SERIAL_ECHOLNPGM("Endstop width: ", (trigger_pos_2 - trigger_pos_1), " degrees");
+      SERIAL_ECHOLNPGM("Home position (center): ", home_pos);
+      
       endstops.enable(false);
-      do_homing_move(axis, -bump_distance, POLAR_Y_BUMP_FEEDRATE, false);
-      planner.synchronize();
+      do_homing_move(axis, home_pos - current_position[axis], bump_feedrate, false);
       
-      // Phase 4: Slow approach from one side
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 4: Slow approach (side 1)");
-      endstops.enable(true);
-      endstops.hit_on_purpose();
-      
-      do_homing_move(axis, bump_distance * 2, POLAR_Y_BUMP_FEEDRATE, true);
-      planner.synchronize();
-      
-      const float trigger_pos_1 = current_position[axis];
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Trigger position 1: ", trigger_pos_1);
-      
-      // Phase 5: Back off for second approach
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 5: Back off for second approach");
-      endstops.enable(false);
-      do_homing_move(axis, bump_distance * 2, POLAR_Y_BUMP_FEEDRATE, false);
-      planner.synchronize();
-      
-      // Phase 6: Slow approach from opposite side
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Phase 6: Slow approach (side 2)");
-      endstops.enable(true);
-      endstops.hit_on_purpose();
-      
-      do_homing_move(axis, -bump_distance * 3, POLAR_Y_BUMP_FEEDRATE, true);
-      planner.synchronize();
-      
-      const float trigger_pos_2 = current_position[axis];
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Trigger position 2: ", trigger_pos_2);
-      
-      // Phase 7: Calculate center position and move there
-      const float home_position = (trigger_pos_1 + trigger_pos_2) / 2.0f;
-      if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Calculated home position: ", home_position);
-      
-      // Move to calculated home position
-      endstops.enable(false);
-      const float move_to_home = home_position - trigger_pos_2;
-      do_homing_move(axis, move_to_home, POLAR_Y_BUMP_FEEDRATE, false);
-      planner.synchronize();
-      
-      // Set this position as Y=0
+      // Set as Y=0
       current_position[axis] = 0;
       sync_plan_position();
-      
       endstops.not_homing();
       
-      SERIAL_ECHOLNPGM("POLAR Y HOMING: Complete - Y set to 0");
-      SERIAL_ECHOLNPGM("=== POLAR Y HOMING END ===");
-      
-      if (DEBUGGING(LEVELING)) {
-        DEBUG_ECHOLNPGM("Home set at Y=0");
-        DEBUG_ECHOLNPGM("<<< homeaxis_polar_y()");
-      }
+      SERIAL_ECHOLNPGM("=== POLAR Y HOMING COMPLETE ===");
     }
   #endif
 
