@@ -63,6 +63,9 @@ Endstops endstops;
 // private:
 
 bool Endstops::enabled, Endstops::enabled_globally; // Initialized by settings.load()
+#if ENABLED(POLAR_Y_HOMING)
+  bool Endstops::polar_y_check_both_dirs = false;
+#endif
 
 volatile Endstops::endstop_mask_t Endstops::hit_state;
 Endstops::endstop_mask_t Endstops::live_state = 0;
@@ -853,7 +856,7 @@ void Endstops::update() {
       #define Y_NEG_DIR_TEST !stepper.motor_direction(Y_AXIS_HEAD)
     #endif
     if (Y_MOVE_TEST) {
-      if (Y_NEG_DIR_TEST) { // -direction
+      if (Y_NEG_DIR_TEST TERN_(POLAR_Y_HOMING, || polar_y_check_both_dirs)) { // -direction (or bidirectional during polar homing)
         #if HAS_Y_MIN_STATE
           PROCESS_ENDSTOP_Y(MIN);
           #if   CORE_DIAG(XY, X, MIN)

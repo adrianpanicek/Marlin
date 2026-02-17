@@ -1817,6 +1817,7 @@
   #define POLAR_Y_HOMING_FEEDRATE 3.0  // Feedrate for initial search (degrees/s)
   #define POLAR_Y_BUMP_FEEDRATE 1.0    // Feedrate for precise detection (degrees/s)
   #define POLAR_Y_BUMP_DISTANCE 10.0    // Distance to back off (degrees)
+  #define POLAR_Y_WINDOW_STEP   0.5     // Step size (degrees) when scanning for window exit edge
 #endif
 
 /**
