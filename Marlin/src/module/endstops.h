@@ -245,12 +245,6 @@ class Endstops {
     // Clear endstops (i.e., they were hit intentionally) to suppress the report
     FORCE_INLINE static void hit_on_purpose() { hit_state = 0; }
 
-    #if ENABLED(POLAR_Y_HOMING)
-      // When true, Y_MIN is checked in the ISR regardless of travel direction.
-      // Used by homeaxis_polar_y() Phase 4 to detect the exit edge via positive approach.
-      static bool polar_y_check_both_dirs;
-    #endif
-
     // Enable / disable endstop z-probe checking
     #if HAS_BED_PROBE
       static volatile bool z_probe_enabled;

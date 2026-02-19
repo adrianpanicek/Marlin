@@ -2095,8 +2095,8 @@ void prepare_line_to_destination() {
    * Finds both edges of the endstop trigger window:
    *   - Phase 2: back off, ISR approach negative → precise entry edge (trigger_pos_1)
    *   - Phase 3: coarse poll negative → rough exit edge location
-   *   - Phase 4: back off further negative, ISR approach positive (bidirectional Y_MIN check
-   *              via polar_y_check_both_dirs flag) → precise exit edge (trigger_pos_2)
+   *   - Phase 4: back off further negative, ISR approach positive (Y_MIN always checked
+   *              in both directions for POLAR) → precise exit edge (trigger_pos_2)
    * Sets home at the center of the two edges.
    */
   #if ENABLED(POLAR_Y_HOMING)
@@ -2124,7 +2124,7 @@ void prepare_line_to_destination() {
 
       // --- Phase 1: Bidirectional fast search (ISR) ---
       // Try negative first. If not found, return to start and try positive.
-      // The positive search uses polar_y_check_both_dirs so Y_MIN ISR fires during +movement.
+      // Y_MIN ISR fires in both directions for POLAR_Y_HOMING.
       // Either way Phase 2 onwards is identical: back off positive then approach negative.
       SERIAL_ECHOLNPGM("Ph1a: searching negative");
       endstops.hit_on_purpose();
@@ -2166,8 +2166,8 @@ void prepare_line_to_destination() {
       SERIAL_ECHOLNPGM("Ph2: entry edge = ", trigger_pos_1);
 
       // --- Phase 3: Coarse poll negative → rough exit edge ---
-      // Y_MIN ISR only fires on ON-transition during negative movement; it cannot detect
-      // the OFF-transition (window exit). Poll live state manually to locate the far side.
+      // The ISR fires on endstop trigger (ON-transition), not when it clears (OFF-transition).
+      // Poll live state manually to locate when the endstop clears (exit edge).
       endstops.enable(false);
       bool rough_exit_found = false;
       for (float traveled = 0; traveled < bump_distance * 2.0f; traveled += POLAR_Y_WINDOW_STEP) {
@@ -2191,16 +2191,14 @@ void prepare_line_to_destination() {
       SERIAL_ECHOLNPGM("Ph3: exit edge rough = ", trigger_pos_2);
 
       // --- Phase 4: Back further negative, ISR approach positive → precise exit edge ---
-      // polar_y_check_both_dirs extends the Y_MIN ISR check to positive travel so the
+      // Y_MIN ISR fires in both directions for POLAR_Y_HOMING, so the
       // interrupt fires when the bump is contacted from the negative side.
       do_homing_move(axis, -bump_distance, bump_feedrate, false);
-      endstops.polar_y_check_both_dirs = true;
       endstops.enable(true);
       endstops.hit_on_purpose();
       do_homing_move(axis, bump_distance + 2.0f, bump_feedrate, true);
-      endstops.polar_y_check_both_dirs = false;
       trigger_pos_2 = current_position[axis];
-      if (!endstops.trigger_state()) SERIAL_ERROR_MSG("Ph4: ISR did not fire! Check wiring/polar_y_check_both_dirs");
+      if (!endstops.trigger_state()) SERIAL_ERROR_MSG("Ph4: ISR did not fire! Check wiring");
       SERIAL_ECHOLNPGM("Ph4: exit edge = ", trigger_pos_2);
 
       // --- Calculate center and move home ---
