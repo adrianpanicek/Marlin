@@ -2150,95 +2150,21 @@ void prepare_line_to_destination() {
       // Try negative first. If not found, return to start and try positive.
       // Y_MIN ISR fires in both directions for POLAR_Y_HOMING.
       // Either way Phase 2 onwards is identical: back off positive then approach negative.
-      SERIAL_ECHOLNPGM("Ph1a: searching negative");
+      SERIAL_ECHOLNPGM("Ph1: searching negative");
       endstops.hit_on_purpose();
-      do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, true);
+      do_homing_move(axis, -search_distance, bump_feedrate, true);
 
       // do_homing_move() clears hit_state via validate_homing_move(),
       // so check the live endstop pin state instead
       endstops.update();
       if (!endstops.state()) {
-        SERIAL_ECHOLNPGM("Ph1a: not found, moving to positive");
+        SERIAL_ECHOLNPGM("Ph1: not found, moving to positive");
 
-        // Move over the start position and try homing negative from the other side
-        endstops.enable(false);
-        do_homing_move(axis, search_distance * 2, POLAR_Y_HOMING_FEEDRATE, false);
-
-        SERIAL_ECHOLNPGM("Ph1b: retrying negative homing from positive side");
-        endstops.enable(true);
-        endstops.hit_on_purpose();
-        do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, true);
-
-        endstops.update();
-        if (!endstops.state()) {
-          SERIAL_ERROR_MSG("Y homing failed: endstop not found within +-", POLAR_Y_SEARCH_DEGREES, " deg");
-          endstops.not_homing();
-          return;
-        }
+        endstops.not_homing(); // TEST
+        return;
       }
       
-      SERIAL_ECHOLNPGM("Ph1: found positive edge at ", current_position[axis]);
-      
-      // --- Phase 2: Back off, ISR approach negative → precise entry edge ---
-      SERIAL_ECHOLNPGM("Ph2: finding positive edge precisely");
-      if (!polar_y_slow_approach(axis, bump_distance, bump_feedrate)) {
-        SERIAL_ERROR_MSG("Ph2: could not find positive edge!");
-        endstops.not_homing();
-        return;
-      }
-      trigger_pos_1 = current_position[axis];
-      SERIAL_ECHOLNPGM("Ph2: found positive edge at ", trigger_pos_1);
-
-      // --- Phase 3: Coarse poll negative → rough exit edge ---
-      // The ISR fires on endstop trigger (ON-transition), not when it clears (OFF-transition).
-      // Poll live state manually to locate when the endstop clears (exit edge).
-      SERIAL_ECHOLNPGM("Ph3: stepping over bump");
-      endstops.enable(false);
-      bool rough_exit_found = false;
-      for (float traveled = 0; traveled < bump_distance * 2.0f; traveled += POLAR_Y_WINDOW_STEP) {
-        if (DEBUGGING(LEVELING))
-          DEBUG_ECHOLNPGM("Ph3: searching ", current_position[axis], "-", current_position[axis] - POLAR_Y_WINDOW_STEP);
-
-        current_position[axis] -= POLAR_Y_WINDOW_STEP;
-        line_to_current_position(bump_feedrate);
-        planner.synchronize();
-        endstops.update(); // refresh live_state / validated_live_state after motion stops
-        if (!endstops.state()) {
-          SERIAL_ECHOLNPGM("Ph3: endstop cleared");
-          trigger_pos_2 = current_position[axis];
-          rough_exit_found = true;
-          break;
-        }
-        if (DEBUGGING(LEVELING))
-          DEBUG_ECHOLNPGM("Ph3: endstop still triggered");
-      }
-
-      if (!rough_exit_found) {
-        SERIAL_ERROR_MSG("Y homing failed: negative edge not found (bump wider than ", bump_distance * 2.0f, " deg?)");
-        endstops.not_homing();
-        return;
-      }
-      SERIAL_ECHOLNPGM("Ph3: found negative edge roughly at ", trigger_pos_2);
-
-      // --- Phase 4: Back further negative, ISR approach positive → precise exit edge ---
-      // Y_MIN ISR fires in both directions for POLAR_Y_HOMING, so the
-      // interrupt fires when the bump is contacted from the negative side.
-      SERIAL_ECHOLNPGM("Ph4: finding negative edge precisely");
-      if (!polar_y_slow_approach(axis, -bump_distance, bump_feedrate)) {
-        SERIAL_ERROR_MSG("Ph4: could not find negative edge!");
-        endstops.not_homing();
-        return;
-      }
-      trigger_pos_2 = current_position[axis];
-      SERIAL_ECHOLNPGM("Ph4: found negative edge at ", trigger_pos_2);
-
-      // --- Calculate center and move home ---
-      const float window_width = trigger_pos_1 - trigger_pos_2; // entry is less negative than exit
-      const float home_pos = (trigger_pos_1 + trigger_pos_2) / 2.0f;
-      SERIAL_ECHOLNPGM("Y home: width=", window_width, " center=", home_pos);
-
-      endstops.enable(false);
-      do_homing_move(axis, home_pos - current_position[axis], bump_feedrate, false);
+      SERIAL_ECHOLNPGM("Ph: found positive edge ");
 
       // Set as Y=0
       current_position[axis] = 0;
