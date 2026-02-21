@@ -2116,10 +2116,13 @@ void prepare_line_to_destination() {
       endstops.hit_on_purpose();
       do_homing_move(axis, approach_distance, feedrate, true);
 
-      const uint8_t trig = endstops.trigger_state();
-      SERIAL_ECHOLNPGM("  Trigger states after approaching ", trig);
+      // do_homing_move() clears hit_state via validate_homing_move(),
+      // so check the live endstop pin state instead
+      endstops.update();
+      const auto trig = endstops.state();
+      SERIAL_ECHOLNPGM("  Endstop state after approach: ", trig);
 
-      return trig & _BV(Y_MIN);
+      return trig;
     }
     
     void homeaxis_polar_y() {
@@ -2151,7 +2154,10 @@ void prepare_line_to_destination() {
       endstops.hit_on_purpose();
       do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, true);
 
-      if (!(endstops.trigger_state() & _BV(Y_MIN))) {
+      // do_homing_move() clears hit_state via validate_homing_move(),
+      // so check the live endstop pin state instead
+      endstops.update();
+      if (!endstops.state()) {
         SERIAL_ECHOLNPGM("Ph1a: not found, moving to positive");
 
         // Move over the start position and try homing negative from the other side
@@ -2163,7 +2169,8 @@ void prepare_line_to_destination() {
         endstops.hit_on_purpose();
         do_homing_move(axis, -search_distance, POLAR_Y_HOMING_FEEDRATE, true);
 
-        if (!(endstops.trigger_state() & _BV(Y_MIN))) {
+        endstops.update();
+        if (!endstops.state()) {
           SERIAL_ERROR_MSG("Y homing failed: endstop not found within +-", POLAR_Y_SEARCH_DEGREES, " deg");
           endstops.not_homing();
           return;
@@ -2196,7 +2203,7 @@ void prepare_line_to_destination() {
         line_to_current_position(bump_feedrate);
         planner.synchronize();
         endstops.update(); // refresh live_state / validated_live_state after motion stops
-        if (!(endstops.state() & _BV(Y_MIN))) {
+        if (!endstops.state()) {
           SERIAL_ECHOLNPGM("Ph3: endstop cleared");
           trigger_pos_2 = current_position[axis];
           rough_exit_found = true;
