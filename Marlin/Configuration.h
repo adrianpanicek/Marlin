@@ -1096,7 +1096,7 @@
 
   // Movements fall inside POLAR_FAST_RADIUS are assigned the highest possible feedrate
   // to compensate unwanted deposition related to the near-origin motion problem.
-  #define POLAR_FAST_RADIUS 700.0f            // (mm)
+  #define POLAR_FAST_RADIUS 0.0f            // (mm)
 
   // Radius which is unreachable by the tool.
   // Needed if the tool is not perfectly aligned to the center of the polar axis.
